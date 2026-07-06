@@ -13,8 +13,12 @@ const transactionRoutes = require('./src/routes/transactionRoutes');
 const maintenanceRoutes = require('./src/routes/maintenanceRoutes');
 const stockRoutes = require('./src/routes/stockRoutes');
 const reportRoutes = require('./src/routes/reportRoutes');
+const metricsRoutes = require('./src/routes/metricsRoutes');
+const auditRoutes = require('./src/routes/auditRoutes');
 const errorHandler = require('./src/middleware/errorHandler');
 const requestLogger = require('./src/middleware/requestLogger');
+const metricsMiddleware = require('./src/middleware/metricsMiddleware');
+const { snapshot } = require('./src/monitoring/metricsStore');
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -29,12 +33,17 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: clientOrigin,
-  credentials: true,
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
+  credentials: true
 }));
 
 app.use(express.json({ limit: '25kb' }));
 app.use(requestLogger);
+app.use(metricsMiddleware);
 
 if (!isProd) {
   app.use(morgan('dev'));
@@ -42,7 +51,7 @@ if (!isProd) {
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 300),
   message: { message: 'Too many requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -50,7 +59,7 @@ const globalLimiter = rateLimit({
 
 const writeLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: Number(process.env.RATE_LIMIT_WRITE_MAX || 60),
   message: { message: 'Too many write requests. Please slow down.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -58,7 +67,7 @@ const writeLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: Number(process.env.RATE_LIMIT_AUTH_MAX || 10),
   message: { message: 'Too many authentication attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -75,6 +84,28 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/ready', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({ status: 'ready', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'not_ready', message: 'Database unavailable', requestId: req.id });
+  }
+});
+
+app.get('/metrics-public-summary', (req, res) => {
+  const data = snapshot();
+  res.json({
+    service: data.service,
+    uptimeSeconds: data.uptimeSeconds,
+    requestsTotal: data.requestsTotal,
+    errorsTotal: data.errorsTotal,
+    errorRate: data.errorRate,
+    averageLatencyMs: data.averageLatencyMs,
+    maxLatencyMs: data.maxLatencyMs,
+  });
+});
+
 app.get('/', (req, res) => {
   res.json({
     message: 'Inventory Management System API',
@@ -88,6 +119,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/metrics', metricsRoutes);
+app.use('/api/audit-logs', auditRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found`, requestId: req.id });
@@ -107,6 +140,9 @@ sequelize.authenticate()
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
       console.log(`Allowed client origin: ${clientOrigin}`);
+      console.log(`Admin metrics endpoint: /api/metrics`);
+      console.log(`Admin audit endpoint: /api/audit-logs`);
+      console.log(`Readiness endpoint: /ready`);
     });
   })
   .catch((err) => {

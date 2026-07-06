@@ -1,6 +1,7 @@
 ﻿const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models/index');
+const { writeAuditLog } = require('../services/auditService');
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000;
@@ -22,13 +23,21 @@ exports.register = async (req, res, next) => {
 
     const hashed = await bcrypt.hash(password, 12);
 
-    await User.create({
+    const user = await User.create({
       fullName,
       email,
       password: hashed,
       role: 'standard_user',
       isApproved: false,
       isActive: true,
+    });
+
+    await writeAuditLog({
+      req,
+      action: 'user.register',
+      tableName: 'Users',
+      recordId: user.id,
+      newValues: user,
     });
 
     res.status(201).json({
@@ -56,6 +65,14 @@ exports.createUserByAdmin = async (req, res, next) => {
       isActive: true,
       approvedBy: req.user.id,
       approvedAt: new Date(),
+    });
+
+    await writeAuditLog({
+      req,
+      action: 'user.create_by_admin',
+      tableName: 'Users',
+      recordId: user.id,
+      newValues: user,
     });
 
     res.status(201).json({
@@ -168,11 +185,21 @@ exports.approveUser = async (req, res, next) => {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
+    const oldValues = user.toJSON();
     await user.update({
       isApproved: true,
       approvedBy: req.user.id,
       approvedAt: new Date(),
       role: req.body.role || user.role,
+    });
+
+    await writeAuditLog({
+      req,
+      action: 'user.approve',
+      tableName: 'Users',
+      recordId: user.id,
+      oldValues,
+      newValues: user,
     });
 
     res.json({ message: `${user.fullName} has been approved successfully.`, user: safeUserJson(user) });
@@ -190,7 +217,17 @@ exports.rejectUser = async (req, res, next) => {
       return res.status(400).json({ message: 'You cannot reject your own account.' });
     }
 
+    const oldValues = user.toJSON();
     await user.destroy();
+
+    await writeAuditLog({
+      req,
+      action: 'user.reject',
+      tableName: 'Users',
+      recordId: Number(req.params.id),
+      oldValues,
+    });
+
     res.json({ message: 'User registration rejected and removed.' });
   } catch (err) {
     next(err);
@@ -206,7 +243,18 @@ exports.toggleUserActive = async (req, res, next) => {
       return res.status(400).json({ message: 'You cannot deactivate your own account.' });
     }
 
+    const oldValues = user.toJSON();
     await user.update({ isActive: !user.isActive });
+
+    await writeAuditLog({
+      req,
+      action: user.isActive ? 'user.activate' : 'user.deactivate',
+      tableName: 'Users',
+      recordId: user.id,
+      oldValues,
+      newValues: user,
+    });
+
     res.json({ message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully.` });
   } catch (err) {
     next(err);

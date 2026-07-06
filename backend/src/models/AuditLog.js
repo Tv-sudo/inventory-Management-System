@@ -1,34 +1,46 @@
-const { DataTypes } = require('sequelize');
+﻿const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const AuditLog = sequelize.define('AuditLog', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true
+    autoIncrement: true,
   },
   userId: {
-    type: DataTypes.INTEGER
+    type: DataTypes.INTEGER,
   },
   action: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: false,
   },
   tableName: {
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
   },
   recordId: {
-    type: DataTypes.INTEGER
+    type: DataTypes.INTEGER,
   },
   oldValues: {
-    type: DataTypes.JSON
+    type: DataTypes.JSON,
   },
   newValues: {
-    type: DataTypes.JSON
+    type: DataTypes.JSON,
   },
   ipAddress: {
-    type: DataTypes.STRING
-  }
+    type: DataTypes.STRING,
+  },
+  requestId: {
+    type: DataTypes.STRING,
+  },
+}, {
+  indexes: [
+    { fields: ['userId'] },
+    { fields: ['action'] },
+    { fields: ['tableName'] },
+    { fields: ['recordId'] },
+    { fields: ['createdAt'] },
+    { fields: ['requestId'] },
+  ],
 });
 
 module.exports = AuditLog;

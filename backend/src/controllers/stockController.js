@@ -1,5 +1,6 @@
 ﻿const { Op, where, col } = require('sequelize');
 const { StockItem } = require('../models/index');
+const { writeAuditLog } = require('../services/auditService');
 
 const stockFields = ['name', 'category', 'quantity', 'minimumQuantity', 'unitCost', 'location', 'unit'];
 const pick = (source, fields) => Object.fromEntries(
@@ -9,6 +10,13 @@ const pick = (source, fields) => Object.fromEntries(
 exports.createStockItem = async (req, res, next) => {
   try {
     const item = await StockItem.create(pick(req.body, stockFields));
+    await writeAuditLog({
+      req,
+      action: 'stock.create',
+      tableName: 'StockItems',
+      recordId: item.id,
+      newValues: item,
+    });
     res.status(201).json({ message: 'Stock item created.', item });
   } catch (err) {
     next(err);
@@ -28,7 +36,19 @@ exports.updateStockItem = async (req, res, next) => {
   try {
     const item = await StockItem.findByPk(req.params.id);
     if (!item) return res.status(404).json({ message: 'Stock item not found.' });
+
+    const oldValues = item.toJSON();
     await item.update(pick(req.body, stockFields));
+
+    await writeAuditLog({
+      req,
+      action: 'stock.update',
+      tableName: 'StockItems',
+      recordId: item.id,
+      oldValues,
+      newValues: item,
+    });
+
     res.json({ message: 'Stock item updated.', item });
   } catch (err) {
     next(err);

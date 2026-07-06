@@ -1,5 +1,6 @@
 ﻿const sequelize = require('../config/database');
 const { Transaction, Asset, User } = require('../models/index');
+const { writeAuditLog } = require('../services/auditService');
 
 exports.createTransaction = async (req, res, next) => {
   const dbTx = await sequelize.transaction();
@@ -26,6 +27,7 @@ exports.createTransaction = async (req, res, next) => {
       return res.status(400).json({ message: 'Asset is not checked out.' });
     }
 
+    const oldAssetValues = asset.toJSON();
     const transaction = await Transaction.create({
       assetId,
       userId: req.user.id,
@@ -41,6 +43,25 @@ exports.createTransaction = async (req, res, next) => {
       status: type === 'checkout' ? 'checked_out' : 'available',
       ...(type === 'checkin' && conditionAtReturn ? { condition: conditionAtReturn } : {}),
     }, { transaction: dbTx });
+
+    await writeAuditLog({
+      req,
+      action: `asset.${type}`,
+      tableName: 'Transactions',
+      recordId: transaction.id,
+      newValues: transaction,
+      transaction: dbTx,
+    });
+
+    await writeAuditLog({
+      req,
+      action: `asset_status.${type}`,
+      tableName: 'Assets',
+      recordId: asset.id,
+      oldValues: oldAssetValues,
+      newValues: asset,
+      transaction: dbTx,
+    });
 
     await dbTx.commit();
     res.status(201).json({ message: `Asset ${type} successful.`, transaction });
