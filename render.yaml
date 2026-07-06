@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: inventory-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        value: inventory_secret_key_2026
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventory-db
+          property: connectionString
+
+databases:
+  - name: inventory-db
+    databaseName: inventory_db
+    user: inventory_user
+    
