@@ -68,3 +68,40 @@ table { border-collapse: collapse; width: 100%; }
 .badge-danger { background: #d6303122; color: #d63031; }
 .badge-info { background: #0984e322; color: #0984e3; }
 .badge-gray { background: #b2bec322; color: #636e72; }
+
+@media (max-width: 768px) {
+  /* Hide sidebar on mobile */
+  div[style*="width: 250px"],
+  div[style*="width: 70px"] {
+    display: none !important;
+  }
+
+  /* Full width main content on mobile */
+  div[style*="margin-left: 250px"],
+  div[style*="margin-left: 70px"] {
+    margin-left: 0 !important;
+  }
+
+  /* Fix navbar on mobile */
+  div[style*="left: 250px"],
+  div[style*="left: 70px"] {
+    left: 0 !important;
+  }
+
+  /* Fix padding on mobile */
+  main {
+    padding: 16px !important;
+  }
+
+  /* Fix tables on mobile */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* Fix grid on mobile */
+  div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
